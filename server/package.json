@@ -1,0 +1,12 @@
+{
+  "name": "agent-server",
+  "private": true,
+  "type": "commonjs",
+  "scripts": {
+    "start": "node ../dist/index.cjs"
+  }
+}
+
+
+
+================================================
