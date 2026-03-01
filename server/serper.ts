@@ -226,7 +226,3 @@ export async function searchJobsUK(params: { query: string; location: string }):
 
   return all.slice(0, 40);
 }
-
-
-
-================================================
