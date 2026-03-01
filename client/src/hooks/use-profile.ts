@@ -33,7 +33,3 @@ export function useProfile() {
 
   return { profileQuery, updateProfile };
 }
-
-
-
-================================================
