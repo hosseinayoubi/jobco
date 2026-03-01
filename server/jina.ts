@@ -71,7 +71,3 @@ export async function rerankJobsWithJina(params: {
     .sort((a, b) => b.score - a.score)
     .map((x) => x.j);
 }
-
-
-
-================================================
