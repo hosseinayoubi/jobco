@@ -344,7 +344,3 @@ export async function aiGenerate(params: { jobTitle: string; companyName: string
     throw new Error(friendlyOpenAIError(e));
   }
 }
-
-
-
-================================================
