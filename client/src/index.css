@@ -80,7 +80,3 @@
 ::-webkit-scrollbar-thumb {
   @apply bg-muted rounded-full hover:bg-muted-foreground/50 transition-colors;
 }
-
-
-
-================================================
