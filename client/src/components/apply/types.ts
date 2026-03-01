@@ -51,7 +51,3 @@ export type SearchResult = {
   url: string;
   date?: string;
 };
-
-
-
-================================================
