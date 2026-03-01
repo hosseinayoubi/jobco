@@ -98,7 +98,3 @@ export function useAuth() {
     [user, isLoading, login, register, logout]
   );
 }
-
-
-
-================================================
