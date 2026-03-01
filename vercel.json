@@ -1,13 +1,14 @@
 {
   "version": 2,
-  "builds": [
-    {
-      "src": "api/[...path].ts",
-      "use": "@vercel/node"
-    }
-  ],
+  "buildCommand": "prisma generate && vite build",
+  "outputDirectory": "dist/public",
   "rewrites": [
     { "source": "/api/(.*)", "destination": "/api/[...path].ts" },
     { "source": "/(.*)", "destination": "/index.html" }
-  ]
+  ],
+  "functions": {
+    "api/[...path].ts": {
+      "runtime": "@vercel/node@5.x"
+    }
+  }
 }
