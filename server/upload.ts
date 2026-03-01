@@ -92,7 +92,3 @@ export const handleResumeUpload = makeUploadHandler("resume");
 
 // Profile page: frontend fd.append("file", file)
 export const handleCvUpload = makeUploadHandler("file");
-
-
-
-================================================
