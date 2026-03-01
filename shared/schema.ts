@@ -63,7 +63,3 @@ export const AnalyzeCvResultSchema = z.object({
   suggestedHeadline: z.string(),
   keywords: z.array(z.string()),
 });
-
-
-
-================================================
