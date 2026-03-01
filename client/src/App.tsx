@@ -11,9 +11,6 @@ import { useAuth } from "@/hooks/use-auth";
 export default function App() {
   const { user, isLoading } = useAuth();
 
-  // Until auth status is known, render nothing (you can show a loading state instead).
-  if (isLoading) return null;
-
   const authed = !!user;
 
   return (
