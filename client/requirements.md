@@ -11,7 +11,3 @@ fontFamily: {
   body: ["'DM Sans'", "sans-serif"],
   mono: ["'JetBrains Mono'", "monospace"],
 }
-
-
-
-================================================
