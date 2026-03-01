@@ -19,7 +19,6 @@ import { getAuthedUser, requireAuth, registerWithEmailPassword, loginWithEmailPa
 import multer from "multer";
 import pdfParse from "pdf-parse";
 import mammoth from "mammoth";
-import path from "path";
 
 function safeTrim(s: any, fallback = "") {
   const t = String(s ?? "").trim();
@@ -28,58 +27,42 @@ function safeTrim(s: any, fallback = "") {
 
 function isAutoQuery(q: string) {
   const t = safeTrim(q).toLowerCase();
-
-  // Accept common UI labels / variants
   if (t === "auto" || t === "auto-from-cv" || t === "from-cv") return true;
   if (t === "auto from cv" || t === "auto (from cv)" || t === "auto-from-cv)") return true;
   if (t.includes("auto") && t.includes("cv")) return true;
-
   return false;
 }
 
 export async function registerRoutes(app: Express) {
   app.get("/api/healthz", (_req, res) => res.json({ ok: true }));
 
-  // -----------------------------
   // AUTH
-  // -----------------------------
   app.post("/api/auth/register", async (req: Request, res: Response) => {
     try {
       const parsed = RegisterInputSchema.parse(req.body);
       const user = await registerWithEmailPassword(parsed);
-
       const token = signAuthToken(user);
       setAuthCookie(res, token);
-
       return res.json(user);
     } catch (e: any) {
       return res.status(400).json({ error: e?.message || "Register failed" });
     }
   });
 
-
   app.post("/api/auth/login", async (req: Request, res: Response) => {
     try {
       const parsed = LoginInputSchema.parse(req.body);
       const user = await loginWithEmailPassword(parsed);
-
       const token = signAuthToken(user);
       setAuthCookie(res, token);
-
       return res.json(user);
     } catch (e: any) {
       return res.status(400).json({ error: e?.message || "Login failed" });
     }
   });
 
-
   app.post("/api/auth/logout", (_req: any, res: any) => {
     clearAuthCookie(res);
-    res.json({ ok: true });
-  });
-
-    } catch {}
-    req.session?.destroy?.(() => {});
     res.json({ ok: true });
   });
 
@@ -87,9 +70,7 @@ export async function registerRoutes(app: Express) {
     res.json(getAuthedUser(req));
   });
 
-  // -----------------------------
   // PROFILE
-  // -----------------------------
   app.get("/api/profile", requireAuth, async (req: any, res: any) => {
     try {
       const user = getAuthedUser(req);
@@ -111,35 +92,27 @@ export async function registerRoutes(app: Express) {
     }
   });
 
-  // -----------------------------
-  // CV UPLOAD (Profile)
-  // -----------------------------
+  // CV UPLOAD
   const upload = multer({
     storage: multer.memoryStorage(),
-    limits: { fileSize: 1 * 1024 * 1024 }, // 1MB
+    limits: { fileSize: 1 * 1024 * 1024 },
   });
 
   async function extractTextFromBuffer(file: Express.Multer.File) {
     const name = (file.originalname || "").toLowerCase();
-
     if (name.endsWith(".pdf")) {
       const out = await pdfParse(file.buffer);
       return (out.text || "").trim();
     }
-
     if (name.endsWith(".docx")) {
       const out = await mammoth.extractRawText({ buffer: file.buffer });
       return (out.value || "").trim();
     }
-
     if (name.endsWith(".txt")) {
       return file.buffer.toString("utf8").trim();
     }
-
-    // fallback: تلاش برای متن ساده (اگر کاربر پسوند اشتباه داد)
     const asText = file.buffer.toString("utf8").trim();
     if (asText.length > 30) return asText;
-
     throw new Error("Unsupported file type. Please upload .pdf, .docx, or .txt.");
   }
 
@@ -149,19 +122,15 @@ export async function registerRoutes(app: Express) {
         if (err) return res.status(400).json({ error: err?.message || "Upload failed" });
         const file = req.file as Express.Multer.File | undefined;
         if (!file) return res.status(400).json({ error: "No file" });
-
         const text = await extractTextFromBuffer(file);
-
         if (!text || text.length < 10) {
           return res.status(400).json({ error: "Could not extract text. Try another file or paste manually." });
         }
-
         const user = getAuthedUser(req);
         const out = await (storage as any).upsertUserProfile?.(user.id, {
           resumeText: text,
           cvFileUrl: null,
         });
-
         return res.json({ ok: true, filename: file.originalname, text, profile: out ?? null });
       } catch (e: any) {
         return res.status(400).json({ error: e?.message || "Upload failed" });
@@ -179,28 +148,21 @@ export async function registerRoutes(app: Express) {
     }
   });
 
-  // -----------------------------
-  // JOBS: SEARCH (UK)
-  // -----------------------------
+  // JOBS: SEARCH
   app.post("/api/jobs/search", requireAuth, async (req: Request, res: Response) => {
     try {
       const body = JobSearchInputSchema.parse(req.body);
-
       const effectiveQuery = await buildSearchQueryFromResume({
         userKeywords: isAutoQuery(body.query) ? "" : body.query,
         resumeText: body.resumeText || "",
       });
-
       const effectiveLocation = safeTrim(body.location, "Worldwide");
-
       const found = await searchJobsUK({ query: effectiveQuery, location: effectiveLocation });
-
       if (body.resumeText && safeTrim(body.resumeText).length > 20 && found.length > 1) {
         const rerankQuery = `Find the best matching jobs for this profile: ${effectiveQuery}`;
         const ranked = await rerankJobsWithJina({ query: rerankQuery, jobs: found });
         return res.json(ranked.slice(0, 30));
       }
-
       return res.json(found.slice(0, 30));
     } catch (e: any) {
       console.error("❌ /api/jobs/search error:", e);
@@ -208,9 +170,7 @@ export async function registerRoutes(app: Express) {
     }
   });
 
-  // -----------------------------
   // JOBS: MATCH
-  // -----------------------------
   app.post("/api/jobs/match", requireAuth, async (req: Request, res: Response) => {
     try {
       const body = JobMatchInputSchema.parse(req.body);
@@ -221,9 +181,7 @@ export async function registerRoutes(app: Express) {
     }
   });
 
-  // -----------------------------
   // JOBS: GENERATE
-  // -----------------------------
   app.post("/api/jobs/generate", requireAuth, async (req: Request, res: Response) => {
     try {
       const body = GenerateMaterialsInputSchema.parse(req.body);
@@ -238,9 +196,7 @@ export async function registerRoutes(app: Express) {
     }
   });
 
-  // -----------------------------
-  // JOBS: SAVE / LIST SAVED
-  // -----------------------------
+  // JOBS: SAVE / LIST
   app.post("/api/jobs/save", requireAuth, async (req: any, res: any) => {
     try {
       const user = getAuthedUser(req);
@@ -262,48 +218,36 @@ export async function registerRoutes(app: Express) {
     }
   });
 
-  // -----------------------------
   // PDF
-  // -----------------------------
-app.post("/api/pdf", requireAuth, async (req: Request, res: Response) => {
-  try {
-    const body = PdfInputSchema.parse(req.body);
-
-    const buf = await createPdfFromText({
-      title: safeTrim((body as any).title, "Document"),
-      content: body.content,
-    } as any);
-
-    // ✅ Guard: اگر خروجی PDF واقعی نبود، به جای PDF، خطا برگردون
-    if (!Buffer.isBuffer(buf) || buf.length < 10 || buf.subarray(0, 5).toString("utf8") !== "%PDF-") {
-      const preview = Buffer.isBuffer(buf) ? buf.toString("utf8").slice(0, 500) : String(buf);
-      return res.status(500).json({
-        error: "PDF generator returned non-PDF output",
-        preview,
-      });
+  app.post("/api/pdf", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const body = PdfInputSchema.parse(req.body);
+      const buf = await createPdfFromText({
+        title: safeTrim((body as any).title, "Document"),
+        content: body.content,
+      } as any);
+      if (!Buffer.isBuffer(buf) || buf.length < 10 || buf.subarray(0, 5).toString("utf8") !== "%PDF-") {
+        const preview = Buffer.isBuffer(buf) ? buf.toString("utf8").slice(0, 500) : String(buf);
+        return res.status(500).json({ error: "PDF generator returned non-PDF output", preview });
+      }
+      res.setHeader("Content-Type", "application/pdf");
+      const fname = safeTrim((body as any).filename, "document.pdf").replace(/[/\\"]/g, "_");
+      res.setHeader("Content-Disposition", `attachment; filename="${fname}"`);
+      res.setHeader("Cache-Control", "no-store");
+      res.setHeader("Content-Length", String(buf.length));
+      return res.status(200).send(buf);
+    } catch (e: any) {
+      return res.status(500).json({ error: e?.message || "PDF failed" });
     }
+  });
 
-    res.setHeader("Content-Type", "application/pdf");
-    const fname = safeTrim((body as any).filename, "document.pdf").replace(/[/\\"]/g, "_");
-    res.setHeader("Content-Disposition", `attachment; filename="${fname}"`);
-    res.setHeader("Cache-Control", "no-store");
-    res.setHeader("Content-Length", String(buf.length));
-
-    return res.status(200).send(buf);
-  } catch (e: any) {
-    return res.status(500).json({ error: e?.message || "PDF failed" });
-  }
-});
-  // -----------------------------
-  // (اختیاری) اگر جایی resume/upload داری، اینجا نگهش می‌داریم:
-  // -----------------------------
+  // RESUME UPLOAD
   app.post("/api/resume/upload", requireAuth, async (req: any, res: any) => {
     upload.single("file")(req, res, async (err: any) => {
       try {
         if (err) return res.status(400).json({ error: err?.message || "Upload failed" });
         const file = req.file as Express.Multer.File | undefined;
         if (!file) return res.status(400).json({ error: "No file" });
-
         const text = await extractTextFromBuffer(file);
         return res.json({ ok: true, filename: file.originalname, text });
       } catch (e: any) {
