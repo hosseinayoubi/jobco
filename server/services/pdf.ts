@@ -529,7 +529,3 @@ export async function textToPdfBuffer(
 
 // ✅ Compatibility export (your server/routes.ts imports this name)
 export const createPdfFromText = textToPdfBuffer;
-
-
-
-================================================
