@@ -322,7 +322,3 @@ export default function GenerateStep({
     </div>
   );
 }
-
-
-
-================================================
