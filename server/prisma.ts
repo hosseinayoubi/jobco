@@ -4,20 +4,6 @@ declare global {
   var __prisma: PrismaClient | undefined;
 }
 
-export const prisma =
-  global.__prisma ??
-  new PrismaClient({
-    log: ["error"],
-    datasources: {
-      db: {
-        url: process.env.DATABASE_URL,
-      },
-    },
-  });
+export const prisma = global.__prisma ?? new PrismaClient({ log: ["error"] });
 
 global.__prisma = prisma;
-
-// Keep connection alive
-prisma.$connect().catch((e) => {
-  console.error("Prisma connect error:", e);
-});
