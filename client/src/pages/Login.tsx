@@ -18,6 +18,7 @@ export default function Login() {
     setErr(null);
     try {
       await auth.login.mutateAsync({ email, password });
+      await new Promise((r) => setTimeout(r, 300));
       navigate("/dashboard");
     } catch (ex: any) {
       setErr(ex?.message || "Login failed");
