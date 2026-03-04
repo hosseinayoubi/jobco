@@ -33,7 +33,7 @@ function friendlyOpenAIError(e: any) {
 }
 
 function modelName() {
-  return process.env.OPENAI_MODEL || "gpt-5-mini";
+  return process.env.OPENAI_MODEL || "gpt-4o-mini";
 }
 
 function clampText(s: string, n: number) {
@@ -41,47 +41,17 @@ function clampText(s: string, n: number) {
   return t.length > n ? t.slice(0, n) : t;
 }
 
-/**
- * Heuristic: extract a reasonable job search query from a resume text.
- * Works even without OpenAI key (basic, but solid).
- */
 function heuristicQueryFromResume(resumeText: string): string {
   const t = (resumeText || "").toLowerCase();
 
-  // Title-like phrases
   const titleHints = [
-    "software engineer",
-    "frontend developer",
-    "backend developer",
-    "full stack",
-    "devops",
-    "data analyst",
-    "data scientist",
-    "product manager",
-    "project manager",
-    "program manager",
-    "technical program manager",
-    "it support",
-    "helpdesk",
-    "field service",
-    "network engineer",
-    "system administrator",
-    "cybersecurity",
-    "qa engineer",
-    "tester",
-    "account manager",
-    "sales",
-    "customer support",
-    "delivery driver",
-    "courier",
-    "warehouse",
-    "cook",
-    "chef",
-    "kitchen",
-    "barista",
-    "cashier",
-    "retail",
-    "cleaner",
+    "software engineer", "frontend developer", "backend developer", "full stack",
+    "devops", "data analyst", "data scientist", "product manager", "project manager",
+    "program manager", "technical program manager", "it support", "helpdesk",
+    "field service", "network engineer", "system administrator", "cybersecurity",
+    "qa engineer", "tester", "account manager", "sales", "customer support",
+    "delivery driver", "courier", "warehouse", "cook", "chef", "kitchen",
+    "barista", "cashier", "retail", "cleaner",
   ];
 
   const foundTitles: string[] = [];
@@ -90,29 +60,10 @@ function heuristicQueryFromResume(resumeText: string): string {
     if (foundTitles.length >= 2) break;
   }
 
-  // Skills (very simple)
   const skillHints = [
-    "react",
-    "next.js",
-    "node",
-    "typescript",
-    "javascript",
-    "python",
-    "java",
-    "c#",
-    "sql",
-    "postgres",
-    "mongodb",
-    "aws",
-    "azure",
-    "docker",
-    "kubernetes",
-    "jira",
-    "itil",
-    "windows",
-    "linux",
-    "network",
-    "troubleshooting",
+    "react", "next.js", "node", "typescript", "javascript", "python", "java",
+    "c#", "sql", "postgres", "mongodb", "aws", "azure", "docker", "kubernetes",
+    "jira", "itil", "windows", "linux", "network", "troubleshooting",
   ];
   const skills: string[] = [];
   for (const s of skillHints) {
@@ -120,7 +71,6 @@ function heuristicQueryFromResume(resumeText: string): string {
     if (skills.length >= 4) break;
   }
 
-  // Build query
   const base = foundTitles.length ? foundTitles[0] : "job";
   const extra = skills.length ? ` ${skills.slice(0, 3).join(" ")}` : "";
   return `${base}${extra}`.replace(/\s{2,}/g, " ").trim();
@@ -132,18 +82,14 @@ export async function buildSearchQueryFromResume(params: {
 }): Promise<string> {
   const userKw = String(params.userKeywords || "").trim();
   const resume = String(params.resumeText || "").trim();
-
-  // If user provided keywords, keep them but still allow enrichment
   const hasUser = userKw.length >= 2;
 
   const client = getClientOrNull();
   if (!client) {
-    // No OpenAI configured → heuristic
     if (hasUser) return userKw;
     return heuristicQueryFromResume(resume);
   }
 
-  // OpenAI is available → produce clean, English query
   const system = `
 You build a single, high-quality English job search query from a resume.
 Return STRICT JSON only:
@@ -160,6 +106,7 @@ Return ONLY JSON.`;
   try {
     const resp = await client.chat.completions.create({
       model: modelName(),
+      max_tokens: 100,
       response_format: { type: "json_object" },
       messages: [
         { role: "system", content: system.trim() },
@@ -167,7 +114,7 @@ Return ONLY JSON.`;
           role: "user",
           content: JSON.stringify({
             userKeywords: hasUser ? userKw : null,
-            resumeText: clampText(resume, 20000),
+            resumeText: clampText(resume, 8000),
           }),
         },
       ],
@@ -181,7 +128,6 @@ Return ONLY JSON.`;
     if (hasUser) return userKw;
     return heuristicQueryFromResume(resume);
   } catch (e: any) {
-    // Fail soft
     if (hasUser) return userKw;
     return heuristicQueryFromResume(resume);
   }
@@ -210,30 +156,25 @@ Return ONLY JSON.`;
   try {
     const resp = await client.chat.completions.create({
       model: modelName(),
+      max_tokens: 800,
       response_format: { type: "json_object" },
       messages: [
         { role: "system", content: system.trim() },
-        { role: "user", content: clampText(params.cvText, 20000) },
+        { role: "user", content: clampText(params.cvText, 8000) },
       ],
     });
 
     const out = resp.choices?.[0]?.message?.content?.trim() || "{}";
-    const parsed =
-      safeJsonParse<{
-        summary: string;
-        skills: string[];
-        roles: string[];
-        seniority: "intern" | "junior" | "mid" | "senior" | "lead" | "unknown";
-        suggestedHeadline: string;
-        keywords: string[];
-      }>(out) || {
-        summary: "",
-        skills: [],
-        roles: [],
-        seniority: "unknown",
-        suggestedHeadline: "",
-        keywords: [],
-      };
+    const parsed = safeJsonParse<{
+      summary: string;
+      skills: string[];
+      roles: string[];
+      seniority: "intern" | "junior" | "mid" | "senior" | "lead" | "unknown";
+      suggestedHeadline: string;
+      keywords: string[];
+    }>(out) || {
+      summary: "", skills: [], roles: [], seniority: "unknown", suggestedHeadline: "", keywords: [],
+    };
 
     return {
       summary: String(parsed.summary || "").slice(0, 800),
@@ -273,36 +214,30 @@ Return ONLY JSON.`;
   try {
     const resp = await client.chat.completions.create({
       model: modelName(),
+      max_tokens: 1000,
       response_format: { type: "json_object" },
       messages: [
         { role: "system", content: system.trim() },
-        { role: "user", content: clampText(combinedText, 25000) },
+        { role: "user", content: clampText(combinedText, 10000) },
       ],
     });
 
     const out = resp.choices?.[0]?.message?.content?.trim() || "{}";
-    const parsed =
-      safeJsonParse<{
-        matchPercentage: number;
-        matchingSkills: string[];
-        missingSkills: string[];
-        strengths: string[];
-        gaps: string[];
-        analysis: string;
-        recommendedKeywords: string[];
-        salaryRange: string;
-        seniorityFit: "perfect" | "good" | "average" | "poor";
-      }>(out) || {
-        matchPercentage: 0,
-        matchingSkills: [],
-        missingSkills: [],
-        strengths: [],
-        gaps: [],
-        analysis: "Could not analyze match.",
-        recommendedKeywords: [],
-        salaryRange: "N/A",
-        seniorityFit: "average",
-      };
+    const parsed = safeJsonParse<{
+      matchPercentage: number;
+      matchingSkills: string[];
+      missingSkills: string[];
+      strengths: string[];
+      gaps: string[];
+      analysis: string;
+      recommendedKeywords: string[];
+      salaryRange: string;
+      seniorityFit: "perfect" | "good" | "average" | "poor";
+    }>(out) || {
+      matchPercentage: 0, matchingSkills: [], missingSkills: [], strengths: [],
+      gaps: [], analysis: "Could not analyze match.", recommendedKeywords: [],
+      salaryRange: "N/A", seniorityFit: "average",
+    };
 
     return {
       matchPercentage: Math.max(0, Math.min(100, Number(parsed.matchPercentage || 0))),
@@ -324,16 +259,28 @@ export async function aiGenerate(params: { jobTitle: string; companyName: string
   const client = getClientOrNull();
   if (!client) throw new Error("OPENAI_API_KEY is missing");
 
-  // (بقیه کد generate شما می‌تواند همان قبلی بماند؛ اینجا فقط کلید/کراس-کراش را درست کردیم)
-  const system = `Return STRICT JSON only: {"customCv":string,"coverLetter":string,"interviewQa":[{"q":string,"a":string,"type":"general"|"technical"}]}`;
+  const system = `You are a professional career coach.
+Generate a tailored CV, cover letter, and interview Q&A for the job.
+Return STRICT JSON only:
+{
+  "customCv": string,
+  "coverLetter": string,
+  "interviewQa": [{"q": string, "a": string, "type": "general"|"technical"}]
+}
+Rules:
+- customCv: max 400 words
+- coverLetter: max 250 words
+- interviewQa: exactly 5 items
+Return ONLY JSON.`;
 
   try {
     const resp = await client.chat.completions.create({
       model: modelName(),
+      max_tokens: 2000,
       response_format: { type: "json_object" },
       messages: [
         { role: "system", content: system.trim() },
-        { role: "user", content: clampText(params.combinedText, 25000) },
+        { role: "user", content: clampText(params.combinedText, 6000) },
       ],
     });
 
