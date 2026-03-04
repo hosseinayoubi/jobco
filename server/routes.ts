@@ -350,3 +350,31 @@ export function registerRoutes(app: Express) {
           : String(buf);
         return res
           .status(500)
+          .json({ error: "PDF generator returned non-PDF output", preview });
+      }
+      res.setHeader("Content-Type", "application/pdf");
+      const fname = safeTrim((body as any).filename, "document.pdf").replace(/[/\\\"]/g, "_");
+      res.setHeader("Content-Disposition", `attachment; filename="${fname}"`);
+      res.setHeader("Cache-Control", "no-store");
+      res.setHeader("Content-Length", String(buf.length));
+      return res.status(200).send(buf);
+    } catch (e: any) {
+      return res.status(500).json({ error: e?.message || "PDF failed" });
+    }
+  });
+
+  // ─── RESUME UPLOAD ───────────────────────────────────────────────────────
+  app.post("/api/resume/upload", requireAuth, async (req: any, res: any) => {
+    upload.single("file")(req, res, async (err: any) => {
+      try {
+        if (err) return res.status(400).json({ error: err?.message || "Upload failed" });
+        const file = req.file as Express.Multer.File | undefined;
+        if (!file) return res.status(400).json({ error: "No file" });
+        const text = await extractTextFromBuffer(file);
+        return res.json({ ok: true, filename: file.originalname, text });
+      } catch (e: any) {
+        return res.status(400).json({ error: e?.message || "Upload failed" });
+      }
+    });
+  });
+}
