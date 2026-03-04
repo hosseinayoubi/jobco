@@ -33,7 +33,7 @@ function friendlyOpenAIError(e: any) {
 }
 
 function modelName() {
-  return process.env.OPENAI_MODEL || "gpt-5-mini";
+  return process.env.OPENAI_MODEL || "gpt-5-mini-2025-08-07";
 }
 
 function clampText(s: string, n: number) {
@@ -354,6 +354,8 @@ Return ONLY JSON, nothing else.`;
       ],
     });
 
+    console.log("MODEL USED:", resp.model);
+    console.log("FINISH REASON:", resp.choices?.[0]?.finish_reason);
     const raw = resp.choices?.[0]?.message?.content?.trim() || "{}";
     console.log("aiGenerate raw length:", raw.length, "preview:", raw.slice(0, 200));
 
