@@ -33,7 +33,7 @@ function friendlyOpenAIError(e: any) {
 }
 
 function modelName() {
-  return process.env.OPENAI_MODEL || "gpt-5-mini-2025-08-07";
+  return process.env.OPENAI_MODEL || "gpt-5-mini";
 }
 
 function clampText(s: string, n: number) {
@@ -324,28 +324,24 @@ export async function aiGenerate(params: { jobTitle: string; companyName: string
   const client = getClientOrNull();
   if (!client) throw new Error("OPENAI_API_KEY is missing");
 
-  const splitIdx = params.combinedText.indexOf("\n\nCandidate:\n");
-  const jobPart = splitIdx !== -1 ? params.combinedText.slice(0, splitIdx) : params.combinedText;
-  const candidatePart = splitIdx !== -1 ? params.combinedText.slice(splitIdx) : "";
-  const userContent = clampText(jobPart, 1500) + clampText(candidatePart, 2000);
+  const system = `You are a professional career coach.
+Given a job description and a candidate CV, generate the following:
+1. A tailored CV (max 300 words, bullet points, ATS-friendly)
+2. A professional cover letter (max 200 words)
+3. Exactly 5 interview Q&A items (mix of general and technical)
 
-  const system = `You are a career coach.
-Generate a tailored CV, cover letter, and 5 interview Q&A items based on the job and candidate profile.
 Return STRICT JSON only:
 {
   "customCv": string,
   "coverLetter": string,
   "interviewQa": [{"q": string, "a": string, "type": "general"|"technical"}]
 }
-Rules:
-- customCv: max 300 words, bullet points
-- coverLetter: max 150 words
-- interviewQa: exactly 5 items
-Return ONLY JSON, nothing else.`;
+Return ONLY valid JSON. No extra text.`;
 
-  console.log("🔑 API KEY exists:", !!process.env.OPENAI_API_KEY);
-  console.log("🤖 MODEL:", modelName());
-  console.log("📝 userContent length:", userContent.length);
+  const splitIdx = params.combinedText.indexOf("\n\nCandidate:\n");
+  const jobPart = splitIdx !== -1 ? params.combinedText.slice(0, splitIdx) : params.combinedText;
+  const candidatePart = splitIdx !== -1 ? params.combinedText.slice(splitIdx) : "";
+  const userContent = clampText(jobPart, 2000) + clampText(candidatePart, 3000);
 
   try {
     const resp = await client.chat.completions.create({
@@ -353,26 +349,15 @@ Return ONLY JSON, nothing else.`;
       max_completion_tokens: 1500,
       response_format: { type: "json_object" },
       messages: [
-        { role: "system", content: system },
+        { role: "system", content: system.trim() },
         { role: "user", content: userContent },
       ],
     });
 
-    console.log("MODEL USED:", resp.model);
-    console.log("FINISH REASON:", resp.choices?.[0]?.finish_reason);
-    const raw = resp.choices?.[0]?.message?.content?.trim() || "{}";
-    console.log("aiGenerate raw length:", raw.length, "preview:", raw.slice(0, 200));
-
-    const parsed = safeJsonParse<any>(raw) || {};
-    console.log("aiGenerate keys:", Object.keys(parsed).join(","));
-
-    return {
-      customCv: String(parsed.customCv || ""),
-      coverLetter: String(parsed.coverLetter || ""),
-      interviewQa: Array.isArray(parsed.interviewQa) ? parsed.interviewQa : [],
-    };
+    const out = resp.choices?.[0]?.message?.content?.trim() || "{}";
+    const parsed = safeJsonParse<any>(out) || { customCv: "", coverLetter: "", interviewQa: [] };
+    return parsed;
   } catch (e: any) {
-    console.log("aiGenerate error:", String(e?.message || e).slice(0, 300));
     throw new Error(friendlyOpenAIError(e));
   }
 }
