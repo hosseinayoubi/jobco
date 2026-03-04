@@ -1,15 +1,16 @@
-import express from "express";
-import cookieParser from "cookie-parser";
-import { registerRoutes } from "./routes";
+import { createApp } from "../server/app";
+import type { VercelRequest, VercelResponse } from "@vercel/node";
 
-export function createApp() {
-  const app = express();
+let appPromise: ReturnType<typeof createApp> | null = null;
 
-  app.set("trust proxy", 1);
-  app.use(express.json({ limit: "2mb" }));
-  app.use(express.urlencoded({ extended: true }));
-  app.use(cookieParser());
+function getApp() {
+  if (!appPromise) {
+    appPromise = createApp();
+  }
+  return appPromise;
+}
 
-  registerRoutes(app);
-  return app;
+export default async function handler(req: VercelRequest, res: VercelResponse) {
+  const app = await getApp();
+  return app(req as any, res as any);
 }
