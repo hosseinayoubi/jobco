@@ -373,8 +373,14 @@ Rules: coverLetter max 200 words, exactly 5 Q&A items. Return ONLY JSON.`;
     const cvOut = cvResp.choices?.[0]?.message?.content?.trim() || "{}";
     const coverOut = coverResp.choices?.[0]?.message?.content?.trim() || "{}";
 
+    console.log("🔵 cvOut:", cvOut.slice(0, 200));
+    console.log("🔵 coverOut:", coverOut.slice(0, 200));
+
     const cvParsed = safeJsonParse<any>(cvOut) || { customCv: "" };
     const coverParsed = safeJsonParse<any>(coverOut) || { coverLetter: "", interviewQa: [] };
+
+    console.log("🟢 cvParsed keys:", Object.keys(cvParsed));
+    console.log("🟢 coverParsed keys:", Object.keys(coverParsed));
 
     return {
       customCv: String(cvParsed.customCv || ""),
