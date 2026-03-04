@@ -229,6 +229,22 @@ export function registerRoutes(app: Express) {
   });
 
   // ─── JOBS: SEARCH ────────────────────────────────────────────────────────
+  // ─── Fetch full job description via Jina Reader ─────────────────────────
+  async function fetchJobDescription(url: string): Promise<string> {
+    try {
+      const jinaKey = process.env.JINA_API_KEY;
+      const headers: any = { "Accept": "text/plain", "X-No-Cache": "true" };
+      if (jinaKey) headers["Authorization"] = `Bearer ${jinaKey}`;
+      const res = await fetch(`https://r.jina.ai/${url}`, { headers, signal: AbortSignal.timeout(8000) });
+      if (!res.ok) return "";
+      const text = await res.text();
+      // Return first 3000 chars - enough for job description
+      return text.slice(0, 3000).trim();
+    } catch {
+      return "";
+    }
+  }
+
   app.post("/api/jobs/search", requireAuth, async (req: Request, res: Response) => {
     try {
       const body = JobSearchInputSchema.parse(req.body);
@@ -238,12 +254,30 @@ export function registerRoutes(app: Express) {
       });
       const effectiveLocation = safeTrim(body.location, "Worldwide");
       const found = await searchJobsUK({ query: effectiveQuery, location: effectiveLocation });
-      if (body.resumeText && safeTrim(body.resumeText).length > 20 && found.length > 1) {
+
+      // Take top 10 candidates for reranking/enrichment
+      const candidates = found.slice(0, 10);
+
+      // Rerank with Jina if resume provided
+      let ranked = candidates;
+      if (body.resumeText && safeTrim(body.resumeText).length > 20 && candidates.length > 1) {
         const rerankQuery = `Find the best matching jobs for this profile: ${effectiveQuery}`;
-        const ranked = await rerankJobsWithJina({ query: rerankQuery, jobs: found });
-        return res.json(ranked.slice(0, 30));
+        ranked = await rerankJobsWithJina({ query: rerankQuery, jobs: candidates });
       }
-      return res.json(found.slice(0, 30));
+
+      // Take top 5 and enrich with full job descriptions via Jina Reader
+      const top5 = ranked.slice(0, 5);
+      const enriched = await Promise.all(
+        top5.map(async (job) => {
+          const fullDesc = await fetchJobDescription(job.url);
+          return {
+            ...job,
+            description: fullDesc.length > 100 ? fullDesc : job.description,
+          };
+        })
+      );
+
+      return res.json(enriched);
     } catch (e: any) {
       console.error("❌ /api/jobs/search error:", e);
       return res.status(400).json({ error: e?.message || "Search failed" });
@@ -316,31 +350,3 @@ export function registerRoutes(app: Express) {
           : String(buf);
         return res
           .status(500)
-          .json({ error: "PDF generator returned non-PDF output", preview });
-      }
-      res.setHeader("Content-Type", "application/pdf");
-      const fname = safeTrim((body as any).filename, "document.pdf").replace(/[/\\"]/g, "_");
-      res.setHeader("Content-Disposition", `attachment; filename="${fname}"`);
-      res.setHeader("Cache-Control", "no-store");
-      res.setHeader("Content-Length", String(buf.length));
-      return res.status(200).send(buf);
-    } catch (e: any) {
-      return res.status(500).json({ error: e?.message || "PDF failed" });
-    }
-  });
-
-  // ─── RESUME UPLOAD ───────────────────────────────────────────────────────
-  app.post("/api/resume/upload", requireAuth, async (req: any, res: any) => {
-    upload.single("file")(req, res, async (err: any) => {
-      try {
-        if (err) return res.status(400).json({ error: err?.message || "Upload failed" });
-        const file = req.file as Express.Multer.File | undefined;
-        if (!file) return res.status(400).json({ error: "No file" });
-        const text = await extractTextFromBuffer(file);
-        return res.json({ ok: true, filename: file.originalname, text });
-      } catch (e: any) {
-        return res.status(400).json({ error: e?.message || "Upload failed" });
-      }
-    });
-  });
-}
