@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "buildCommand": "prisma generate && vite build",
+  "buildCommand": "prisma generate && npm run build",
   "outputDirectory": "dist/public",
   "rewrites": [
     { "source": "/api/(.*)", "destination": "/api/[...path].ts" },
