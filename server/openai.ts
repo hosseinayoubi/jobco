@@ -356,4 +356,3 @@ Return ONLY JSON.`;
     throw new Error(friendlyOpenAIError(e));
   }
 }
-{
