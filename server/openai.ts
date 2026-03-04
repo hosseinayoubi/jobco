@@ -33,7 +33,7 @@ function friendlyOpenAIError(e: any) {
 }
 
 function modelName() {
-  return process.env.OPENAI_MODEL || "gpt-5-mini";
+  return process.env.OPENAI_MODEL || "gpt-4o-mini";
 }
 
 function clampText(s: string, n: number) {
@@ -189,6 +189,7 @@ Return ONLY JSON.`;
   }
 }
 
+// ── aiMatch: کد اصلی تو، فقط max_tokens اضافه شد ──
 export async function aiMatch(combinedText: string) {
   const client = getClientOrNull();
   if (!client) throw new Error("OPENAI_API_KEY is missing");
@@ -214,30 +215,37 @@ Return ONLY JSON.`;
   try {
     const resp = await client.chat.completions.create({
       model: modelName(),
-      max_tokens: 1000,
+      max_tokens: 1500,
       response_format: { type: "json_object" },
       messages: [
         { role: "system", content: system.trim() },
-        { role: "user", content: clampText(combinedText, 10000) },
+        { role: "user", content: clampText(combinedText, 25000) },
       ],
     });
 
     const out = resp.choices?.[0]?.message?.content?.trim() || "{}";
-    const parsed = safeJsonParse<{
-      matchPercentage: number;
-      matchingSkills: string[];
-      missingSkills: string[];
-      strengths: string[];
-      gaps: string[];
-      analysis: string;
-      recommendedKeywords: string[];
-      salaryRange: string;
-      seniorityFit: "perfect" | "good" | "average" | "poor";
-    }>(out) || {
-      matchPercentage: 0, matchingSkills: [], missingSkills: [], strengths: [],
-      gaps: [], analysis: "Could not analyze match.", recommendedKeywords: [],
-      salaryRange: "N/A", seniorityFit: "average",
-    };
+    const parsed =
+      safeJsonParse<{
+        matchPercentage: number;
+        matchingSkills: string[];
+        missingSkills: string[];
+        strengths: string[];
+        gaps: string[];
+        analysis: string;
+        recommendedKeywords: string[];
+        salaryRange: string;
+        seniorityFit: "perfect" | "good" | "average" | "poor";
+      }>(out) || {
+        matchPercentage: 0,
+        matchingSkills: [],
+        missingSkills: [],
+        strengths: [],
+        gaps: [],
+        analysis: "Could not analyze match.",
+        recommendedKeywords: [],
+        salaryRange: "N/A",
+        seniorityFit: "average",
+      };
 
     return {
       matchPercentage: Math.max(0, Math.min(100, Number(parsed.matchPercentage || 0))),
@@ -255,6 +263,7 @@ Return ONLY JSON.`;
   }
 }
 
+// ── aiGenerate: input کوتاه شد برای جلوگیری از timeout ──
 export async function aiGenerate(params: { jobTitle: string; companyName: string; combinedText: string }) {
   const client = getClientOrNull();
   if (!client) throw new Error("OPENAI_API_KEY is missing");
