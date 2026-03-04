@@ -3,13 +3,9 @@ import { build as viteBuild } from "vite";
 import { rm, readFile, mkdir, readdir, copyFile, stat } from "fs/promises";
 import path from "node:path";
 
-// server deps to bundle to reduce openat(2) syscalls
-// which helps cold start times
 const allowlist = [
   "@google/generative-ai",
   "axios",
-  // ❌ IMPORTANT: DO NOT bundle connect-pg-simple (needs table.sql at runtime)
-  // "connect-pg-simple",
   "cors",
   "date-fns",
   "drizzle-orm",
@@ -45,14 +41,11 @@ async function existsDir(p: string) {
 
 async function copyDir(src: string, dest: string) {
   if (!(await existsDir(src))) return;
-
   await mkdir(dest, { recursive: true });
   const entries = await readdir(src, { withFileTypes: true });
-
   for (const e of entries) {
     const from = path.join(src, e.name);
     const to = path.join(dest, e.name);
-
     if (e.isDirectory()) {
       await copyDir(from, to);
     } else if (e.isFile()) {
@@ -68,28 +61,38 @@ async function buildAll() {
   console.log("building client...");
   await viteBuild();
 
-  console.log("building server...");
+  console.log("building server (index)...");
   const pkg = JSON.parse(await readFile("package.json", "utf-8"));
   const allDeps = [...Object.keys(pkg.dependencies || {}), ...Object.keys(pkg.devDependencies || {})];
   const externals = allDeps.filter((dep) => !allowlist.includes(dep));
 
+  // Build server/index.ts -> dist/index.cjs (for local/traditional use)
   await esbuild({
     entryPoints: ["server/index.ts"],
     platform: "node",
     bundle: true,
     format: "cjs",
     outfile: "dist/index.cjs",
-    define: {
-      "process.env.NODE_ENV": '"production"',
-    },
+    define: { "process.env.NODE_ENV": '"production"' },
     minify: true,
     external: externals,
     logLevel: "info",
   });
 
-  // ✅ Copy fonts into dist so PDF can always find them
-  // Source: server/assets/fonts
-  // Dest:   dist/server/assets/fonts
+  // Build server/vercel.ts -> dist/vercel.cjs (for Vercel serverless)
+  console.log("building server (vercel)...");
+  await esbuild({
+    entryPoints: ["server/vercel.ts"],
+    platform: "node",
+    bundle: true,
+    format: "cjs",
+    outfile: "dist/vercel.cjs",
+    define: { "process.env.NODE_ENV": '"production"' },
+    minify: true,
+    external: externals,
+    logLevel: "info",
+  });
+
   await copyDir(
     path.resolve(process.cwd(), "server", "assets", "fonts"),
     path.resolve(process.cwd(), "dist", "server", "assets", "fonts"),
