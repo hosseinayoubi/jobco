@@ -19,7 +19,7 @@ const UK_SITES: SiteRule[] = [
   {
     base: "https://www.linkedin.com",
     host: "www.linkedin.com",
-    includeAnyInUrl: ["jobs/view", "jobs/collections", "jobs/search"],
+    includeAnyInUrl: ["jobs/view"],
     excludeInUrl: ["learning", "feed", "posts", "pulse"],
   },
   {
