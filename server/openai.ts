@@ -329,18 +329,19 @@ export async function aiGenerate(params: { jobTitle: string; companyName: string
   const candidatePart = splitIdx !== -1 ? params.combinedText.slice(splitIdx) : "";
   const userContent = clampText(jobPart, 1500) + clampText(candidatePart, 2000);
 
-  const system = `You are a career coach. Given a job description and candidate CV, generate:
-1. A tailored CV (max 300 words, bullet points)
-2. A cover letter (max 150 words)
-3. Exactly 5 interview Q&A items
-
+  const system = `You are a career coach.
+Generate a tailored CV, cover letter, and 5 interview Q&A items based on the job and candidate profile.
 Return STRICT JSON only:
 {
   "customCv": string,
   "coverLetter": string,
-  "interviewQa": [{"q": string, "a": string, "type": "general"}]
+  "interviewQa": [{"q": string, "a": string, "type": "general"|"technical"}]
 }
-Return ONLY valid JSON. No markdown, no extra text.`;
+Rules:
+- customCv: max 300 words, bullet points
+- coverLetter: max 150 words
+- interviewQa: exactly 5 items
+Return ONLY JSON, nothing else.`;
 
   try {
     const resp = await client.chat.completions.create({
@@ -354,15 +355,18 @@ Return ONLY valid JSON. No markdown, no extra text.`;
     });
 
     const raw = resp.choices?.[0]?.message?.content?.trim() || "{}";
-    console.log("aiGenerate raw:", raw.slice(0, 300));
+    console.log("aiGenerate raw length:", raw.length, "preview:", raw.slice(0, 200));
 
     const parsed = safeJsonParse<any>(raw) || {};
+    console.log("aiGenerate keys:", Object.keys(parsed).join(","));
+
     return {
       customCv: String(parsed.customCv || ""),
       coverLetter: String(parsed.coverLetter || ""),
       interviewQa: Array.isArray(parsed.interviewQa) ? parsed.interviewQa : [],
     };
   } catch (e: any) {
+    console.log("aiGenerate error:", String(e?.message || e).slice(0, 300));
     throw new Error(friendlyOpenAIError(e));
   }
 }
