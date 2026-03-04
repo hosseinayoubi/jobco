@@ -338,6 +338,19 @@ Rules:
 - interviewQa: exactly 5 items mixing general and technical
 Return ONLY JSON.`;
 
+  // Split combinedText: job part (before "Candidate:") and candidate part (after "Candidate:")
+  const splitIdx = params.combinedText.indexOf("\n\nCandidate:\n");
+  let jobPart = "";
+  let candidatePart = "";
+  if (splitIdx !== -1) {
+    jobPart = params.combinedText.slice(0, splitIdx);
+    candidatePart = params.combinedText.slice(splitIdx);
+  } else {
+    jobPart = params.combinedText;
+  }
+  // Give job description 2000 chars, candidate CV 3000 chars
+  const userContent = clampText(jobPart, 2000) + clampText(candidatePart, 3000);
+
   try {
     const resp = await client.chat.completions.create({
       model: modelName(),
@@ -345,7 +358,7 @@ Return ONLY JSON.`;
       response_format: { type: "json_object" },
       messages: [
         { role: "system", content: system.trim() },
-        { role: "user", content: clampText(params.combinedText, 6000) },
+        { role: "user", content: userContent },
       ],
     });
 
