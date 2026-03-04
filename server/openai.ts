@@ -33,7 +33,7 @@ function friendlyOpenAIError(e: any) {
 }
 
 function modelName() {
-  return process.env.OPENAI_MODEL || "gpt-4o-mini";
+  return process.env.OPENAI_MODEL || "gpt-5-mini";
 }
 
 function clampText(s: string, n: number) {
@@ -106,7 +106,7 @@ Return ONLY JSON.`;
   try {
     const resp = await client.chat.completions.create({
       model: modelName(),
-      max_tokens: 100,
+      max_completion_tokens: 100,
       response_format: { type: "json_object" },
       messages: [
         { role: "system", content: system.trim() },
@@ -156,7 +156,7 @@ Return ONLY JSON.`;
   try {
     const resp = await client.chat.completions.create({
       model: modelName(),
-      max_tokens: 800,
+      max_completion_tokens: 800,
       response_format: { type: "json_object" },
       messages: [
         { role: "system", content: system.trim() },
@@ -215,7 +215,7 @@ Return ONLY JSON.`;
   try {
     const resp = await client.chat.completions.create({
       model: modelName(),
-      max_tokens: 1500,
+      max_completion_tokens: 1500,
       response_format: { type: "json_object" },
       messages: [
         { role: "system", content: system.trim() },
@@ -285,7 +285,7 @@ Return ONLY JSON.`;
   try {
     const resp = await client.chat.completions.create({
       model: modelName(),
-      max_tokens: 2000,
+      max_completion_tokens: 2000,
       response_format: { type: "json_object" },
       messages: [
         { role: "system", content: system.trim() },
