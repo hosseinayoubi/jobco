@@ -324,21 +324,7 @@ export async function aiGenerate(params: { jobTitle: string; companyName: string
   const client = getClientOrNull();
   if (!client) throw new Error("OPENAI_API_KEY is missing");
 
-  const system = `You are a professional career coach.
-Generate a tailored CV, cover letter, and interview Q&A for the job.
-Return STRICT JSON only:
-{
-  "customCv": string,
-  "coverLetter": string,
-  "interviewQa": [{"q": string, "a": string, "type": "general"|"technical"}]
-}
-Rules:
-- customCv: max 400 words, tailored to the job
-- coverLetter: max 250 words, professional tone
-- interviewQa: exactly 5 items mixing general and technical
-Return ONLY JSON.`;
-
-  // Split combinedText: job part (before "Candidate:") and candidate part (after "Candidate:")
+  // Split combinedText into job and candidate parts
   const splitIdx = params.combinedText.indexOf("\n\nCandidate:\n");
   let jobPart = "";
   let candidatePart = "";
@@ -348,19 +334,53 @@ Return ONLY JSON.`;
   } else {
     jobPart = params.combinedText;
   }
-  // Give job description 2000 chars, candidate CV 3000 chars
-  const userContent = clampText(jobPart, 2000) + clampText(candidatePart, 3000);
+  const userContent = clampText(jobPart, 1500) + clampText(candidatePart, 2000);
+
+  // Generate CV and cover letter separately to avoid timeout
+  const cvSystem = `You are a professional CV writer.
+Given a job and candidate profile, write a tailored CV.
+Return STRICT JSON only: {"customCv": string}
+Rules: max 300 words, bullet points, ATS-friendly. Return ONLY JSON.`;
+
+  const coverSystem = `You are a professional cover letter writer.
+Given a job and candidate profile, write a cover letter AND 5 interview Q&A.
+Return STRICT JSON only: {"coverLetter": string, "interviewQa": [{"q": string, "a": string, "type": "general"|"technical"}]}
+Rules: coverLetter max 200 words, exactly 5 Q&A items. Return ONLY JSON.`;
 
   try {
-    const resp = await client.chat.completions.create({
-      model: modelName(),
-      max_completion_tokens: 2000,
-      response_format: { type: "json_object" },
-      messages: [
-        { role: "system", content: system.trim() },
-        { role: "user", content: userContent },
-      ],
-    });
+    // Run both in parallel
+    const [cvResp, coverResp] = await Promise.all([
+      client.chat.completions.create({
+        model: modelName(),
+        max_completion_tokens: 800,
+        response_format: { type: "json_object" },
+        messages: [
+          { role: "system", content: cvSystem },
+          { role: "user", content: userContent },
+        ],
+      }),
+      client.chat.completions.create({
+        model: modelName(),
+        max_completion_tokens: 1200,
+        response_format: { type: "json_object" },
+        messages: [
+          { role: "system", content: coverSystem },
+          { role: "user", content: userContent },
+        ],
+      }),
+    ]);
+
+    const cvOut = cvResp.choices?.[0]?.message?.content?.trim() || "{}";
+    const coverOut = coverResp.choices?.[0]?.message?.content?.trim() || "{}";
+
+    const cvParsed = safeJsonParse<any>(cvOut) || { customCv: "" };
+    const coverParsed = safeJsonParse<any>(coverOut) || { coverLetter: "", interviewQa: [] };
+
+    return {
+      customCv: String(cvParsed.customCv || ""),
+      coverLetter: String(coverParsed.coverLetter || ""),
+      interviewQa: Array.isArray(coverParsed.interviewQa) ? coverParsed.interviewQa : [],
+    };
 
     const out = resp.choices?.[0]?.message?.content?.trim() || "{}";
     const parsed = safeJsonParse<any>(out) || { customCv: "", coverLetter: "", interviewQa: [] };
