@@ -27,11 +27,8 @@ import {
 import multer from "multer";
 import pdfParse from "pdf-parse";
 import mammoth from "mammoth";
-
-// ─── Google OAuth ───────────────────────────────────────────────────────────
 import passport from "passport";
 import { Strategy as GoogleStrategy } from "passport-google-oauth20";
-import { storage as userStorage } from "./storage";
 
 function safeTrim(s: any, fallback = "") {
   const t = String(s ?? "").trim();
@@ -46,7 +43,7 @@ function isAutoQuery(q: string) {
   return false;
 }
 
-export async function registerRoutes(app: Express) {
+export function registerRoutes(app: Express) {
   app.get("/api/healthz", (_req, res) => res.json({ ok: true }));
 
   // ─── Google OAuth Setup ──────────────────────────────────────────────────
@@ -72,21 +69,16 @@ export async function registerRoutes(app: Express) {
               `${profile.name?.givenName ?? ""} ${profile.name?.familyName ?? ""}`.trim() ||
               null;
 
-            if (!email) return done(new Error("No email from Google"), undefined);
+            if (!email) return done(new Error("No email from Google"), undefined as any);
 
-            // Upsert user: find existing or create
-            let user = await userStorage.getUserByEmail(email);
+            let user = await storage.getUserByEmail(email);
             if (!user) {
-              user = await userStorage.createUser({
-                email,
-                name,
-                passwordHash: null, // Google users have no password
-              });
+              user = await storage.createUser({ email, name, passwordHash: null });
             }
 
             return done(null, { id: user.id, email: user.email, name: user.name ?? null });
           } catch (err: any) {
-            return done(err, undefined);
+            return done(err, undefined as any);
           }
         }
       )
@@ -94,13 +86,11 @@ export async function registerRoutes(app: Express) {
 
     app.use(passport.initialize());
 
-    // Start Google OAuth flow
     app.get(
       "/api/auth/google",
       passport.authenticate("google", { scope: ["profile", "email"], session: false })
     );
 
-    // Google callback
     app.get(
       "/api/auth/google/callback",
       passport.authenticate("google", { session: false, failureRedirect: "/login?error=google" }),
@@ -116,7 +106,6 @@ export async function registerRoutes(app: Express) {
       }
     );
   } else {
-    // Google not configured — return a clear error instead of HTML
     app.get("/api/auth/google", (_req, res) => {
       res.status(501).json({ error: "Google OAuth is not configured on this server." });
     });
