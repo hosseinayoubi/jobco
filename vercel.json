@@ -1,11 +1,10 @@
 {
   "version": 2,
-  "buildCommand": "prisma generate && vite build",
+  "buildCommand": "prisma generate && npx tsx script/build.ts",
   "outputDirectory": "dist/public",
   "functions": {
     "api/[...path].ts": {
-      "maxDuration": 30,
-      "includeFiles": "server/**,shared/**,prisma/**"
+      "maxDuration": 30
     }
   },
   "rewrites": [
