@@ -33,7 +33,7 @@ function friendlyOpenAIError(e: any) {
 }
 
 function modelName() {
-  return process.env.OPENAI_MODEL || "gpt-4o-mini";
+  return process.env.OPENAI_MODEL || "gpt-5-mini";
 }
 
 function clampText(s: string, n: number) {
