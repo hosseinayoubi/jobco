@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "buildCommand": "prisma generate && vite build && tsc -p tsconfig.server.json",
+  "buildCommand": "prisma generate && vite build",
   "outputDirectory": "dist/public",
   "functions": {
     "api/[...path].ts": {
