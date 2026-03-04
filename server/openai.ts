@@ -324,7 +324,6 @@ export async function aiGenerate(params: { jobTitle: string; companyName: string
   const client = getClientOrNull();
   if (!client) throw new Error("OPENAI_API_KEY is missing");
 
-  // Split combinedText into job and candidate parts
   const splitIdx = params.combinedText.indexOf("\n\nCandidate:\n");
   let jobPart = "";
   let candidatePart = "";
@@ -334,21 +333,19 @@ export async function aiGenerate(params: { jobTitle: string; companyName: string
   } else {
     jobPart = params.combinedText;
   }
-  const userContent = clampText(jobPart, 1500) + clampText(candidatePart, 2000);
+  const userContent = clampText(jobPart, 2000) + clampText(candidatePart, 3000);
 
-  // Generate CV and cover letter separately to avoid timeout
   const cvSystem = `You are a professional CV writer.
-Given a job and candidate profile, write a tailored CV.
+Write a tailored CV for the job below. Use the candidate profile provided.
 Return STRICT JSON only: {"customCv": string}
 Rules: max 300 words, bullet points, ATS-friendly. Return ONLY JSON.`;
 
   const coverSystem = `You are a professional cover letter writer.
-Given a job and candidate profile, write a cover letter AND 5 interview Q&A.
+Write a cover letter and 5 interview Q&A for the job below. Use the candidate profile provided.
 Return STRICT JSON only: {"coverLetter": string, "interviewQa": [{"q": string, "a": string, "type": "general"|"technical"}]}
 Rules: coverLetter max 200 words, exactly 5 Q&A items. Return ONLY JSON.`;
 
   try {
-    // Run both in parallel
     const [cvResp, coverResp] = await Promise.all([
       client.chat.completions.create({
         model: modelName(),
@@ -373,24 +370,14 @@ Rules: coverLetter max 200 words, exactly 5 Q&A items. Return ONLY JSON.`;
     const cvOut = cvResp.choices?.[0]?.message?.content?.trim() || "{}";
     const coverOut = coverResp.choices?.[0]?.message?.content?.trim() || "{}";
 
-    console.log("🔵 cvOut:", cvOut.slice(0, 200));
-    console.log("🔵 coverOut:", coverOut.slice(0, 200));
-
     const cvParsed = safeJsonParse<any>(cvOut) || { customCv: "" };
     const coverParsed = safeJsonParse<any>(coverOut) || { coverLetter: "", interviewQa: [] };
-
-    console.log("🟢 cvParsed keys:", Object.keys(cvParsed));
-    console.log("🟢 coverParsed keys:", Object.keys(coverParsed));
 
     return {
       customCv: String(cvParsed.customCv || ""),
       coverLetter: String(coverParsed.coverLetter || ""),
       interviewQa: Array.isArray(coverParsed.interviewQa) ? coverParsed.interviewQa : [],
     };
-
-    const out = resp.choices?.[0]?.message?.content?.trim() || "{}";
-    const parsed = safeJsonParse<any>(out) || { customCv: "", coverLetter: "", interviewQa: [] };
-    return parsed;
   } catch (e: any) {
     throw new Error(friendlyOpenAIError(e));
   }
