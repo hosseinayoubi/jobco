@@ -1,10 +1,13 @@
 import serverless from "serverless-http";
-import { createApp } from "../server/app";
+import express from "express";
+import cookieParser from "cookie-parser";
+import { registerRoutes } from "../server/routes";
 
-// createApp is now async (because registerRoutes is async)
-const appPromise = createApp();
+const app = express();
+app.set("trust proxy", 1);
+app.use(express.json({ limit: "2mb" }));
+app.use(express.urlencoded({ extended: true }));
+app.use(cookieParser());
+registerRoutes(app);
 
-export default async function handler(req: any, res: any) {
-  const app = await appPromise;
-  return serverless(app)(req, res);
-}
+export default serverless(app);
