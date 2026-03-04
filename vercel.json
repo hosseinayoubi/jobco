@@ -1,5 +1,14 @@
-// server/vercel.ts - Vercel entry point (exports app, does NOT call listen)
-
-import { createApp } from "./app";
-const app = createApp();
-export default app;
+{
+  "version": 2,
+  "buildCommand": "prisma generate && npx tsx script/build.ts",
+  "outputDirectory": "dist/public",
+  "functions": {
+    "api/[...path].ts": {
+      "maxDuration": 30
+    }
+  },
+  "rewrites": [
+    { "source": "/api/(.*)", "destination": "/api/[...path].ts" },
+    { "source": "/(.*)", "destination": "/index.html" }
+  ]
+}
