@@ -343,6 +343,10 @@ Rules:
 - interviewQa: exactly 5 items
 Return ONLY JSON, nothing else.`;
 
+  console.log("🔑 API KEY exists:", !!process.env.OPENAI_API_KEY);
+  console.log("🤖 MODEL:", modelName());
+  console.log("📝 userContent length:", userContent.length);
+
   try {
     const resp = await client.chat.completions.create({
       model: modelName(),
