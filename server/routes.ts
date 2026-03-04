@@ -14,11 +14,24 @@ import { analyzeCvText, aiGenerate, aiMatch, buildSearchQueryFromResume } from "
 import { searchJobsUK } from "./serper";
 import { rerankJobsWithJina } from "./jina";
 import { createPdfFromText } from "./services/pdf";
-import { getAuthedUser, requireAuth, registerWithEmailPassword, loginWithEmailPassword, signAuthToken, setAuthCookie, clearAuthCookie } from "./auth";
+import {
+  getAuthedUser,
+  requireAuth,
+  registerWithEmailPassword,
+  loginWithEmailPassword,
+  signAuthToken,
+  setAuthCookie,
+  clearAuthCookie,
+} from "./auth";
 
 import multer from "multer";
 import pdfParse from "pdf-parse";
 import mammoth from "mammoth";
+
+// ─── Google OAuth ───────────────────────────────────────────────────────────
+import passport from "passport";
+import { Strategy as GoogleStrategy } from "passport-google-oauth20";
+import { storage as userStorage } from "./storage";
 
 function safeTrim(s: any, fallback = "") {
   const t = String(s ?? "").trim();
@@ -36,7 +49,83 @@ function isAutoQuery(q: string) {
 export async function registerRoutes(app: Express) {
   app.get("/api/healthz", (_req, res) => res.json({ ok: true }));
 
-  // AUTH
+  // ─── Google OAuth Setup ──────────────────────────────────────────────────
+  const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
+  const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
+  const GOOGLE_CALLBACK_URL =
+    process.env.GOOGLE_CALLBACK_URL || "https://jobco.weomeo.win/api/auth/google/callback";
+
+  if (GOOGLE_CLIENT_ID && GOOGLE_CLIENT_SECRET) {
+    passport.use(
+      new GoogleStrategy(
+        {
+          clientID: GOOGLE_CLIENT_ID,
+          clientSecret: GOOGLE_CLIENT_SECRET,
+          callbackURL: GOOGLE_CALLBACK_URL,
+        },
+        async (_accessToken, _refreshToken, profile, done) => {
+          try {
+            const email =
+              profile.emails?.[0]?.value?.trim().toLowerCase() ?? null;
+            const name =
+              profile.displayName ||
+              `${profile.name?.givenName ?? ""} ${profile.name?.familyName ?? ""}`.trim() ||
+              null;
+
+            if (!email) return done(new Error("No email from Google"), undefined);
+
+            // Upsert user: find existing or create
+            let user = await userStorage.getUserByEmail(email);
+            if (!user) {
+              user = await userStorage.createUser({
+                email,
+                name,
+                passwordHash: null, // Google users have no password
+              });
+            }
+
+            return done(null, { id: user.id, email: user.email, name: user.name ?? null });
+          } catch (err: any) {
+            return done(err, undefined);
+          }
+        }
+      )
+    );
+
+    app.use(passport.initialize());
+
+    // Start Google OAuth flow
+    app.get(
+      "/api/auth/google",
+      passport.authenticate("google", { scope: ["profile", "email"], session: false })
+    );
+
+    // Google callback
+    app.get(
+      "/api/auth/google/callback",
+      passport.authenticate("google", { session: false, failureRedirect: "/login?error=google" }),
+      (req: any, res: Response) => {
+        try {
+          const user = req.user as { id: string; email: string; name: string | null };
+          const token = signAuthToken(user);
+          setAuthCookie(res, token);
+          res.redirect("/dashboard");
+        } catch {
+          res.redirect("/login?error=token");
+        }
+      }
+    );
+  } else {
+    // Google not configured — return a clear error instead of HTML
+    app.get("/api/auth/google", (_req, res) => {
+      res.status(501).json({ error: "Google OAuth is not configured on this server." });
+    });
+    app.get("/api/auth/google/callback", (_req, res) => {
+      res.redirect("/login?error=google_not_configured");
+    });
+  }
+
+  // ─── Email / Password AUTH ───────────────────────────────────────────────
   app.post("/api/auth/register", async (req: Request, res: Response) => {
     try {
       const parsed = RegisterInputSchema.parse(req.body);
@@ -70,7 +159,7 @@ export async function registerRoutes(app: Express) {
     res.json(getAuthedUser(req));
   });
 
-  // PROFILE
+  // ─── PROFILE ─────────────────────────────────────────────────────────────
   app.get("/api/profile", requireAuth, async (req: any, res: any) => {
     try {
       const user = getAuthedUser(req);
@@ -92,7 +181,7 @@ export async function registerRoutes(app: Express) {
     }
   });
 
-  // CV UPLOAD
+  // ─── CV UPLOAD ────────────────────────────────────────────────────────────
   const upload = multer({
     storage: multer.memoryStorage(),
     limits: { fileSize: 1 * 1024 * 1024 },
@@ -124,7 +213,9 @@ export async function registerRoutes(app: Express) {
         if (!file) return res.status(400).json({ error: "No file" });
         const text = await extractTextFromBuffer(file);
         if (!text || text.length < 10) {
-          return res.status(400).json({ error: "Could not extract text. Try another file or paste manually." });
+          return res
+            .status(400)
+            .json({ error: "Could not extract text. Try another file or paste manually." });
         }
         const user = getAuthedUser(req);
         const out = await (storage as any).upsertUserProfile?.(user.id, {
@@ -148,7 +239,7 @@ export async function registerRoutes(app: Express) {
     }
   });
 
-  // JOBS: SEARCH
+  // ─── JOBS: SEARCH ────────────────────────────────────────────────────────
   app.post("/api/jobs/search", requireAuth, async (req: Request, res: Response) => {
     try {
       const body = JobSearchInputSchema.parse(req.body);
@@ -170,7 +261,7 @@ export async function registerRoutes(app: Express) {
     }
   });
 
-  // JOBS: MATCH
+  // ─── JOBS: MATCH ─────────────────────────────────────────────────────────
   app.post("/api/jobs/match", requireAuth, async (req: Request, res: Response) => {
     try {
       const body = JobMatchInputSchema.parse(req.body);
@@ -181,7 +272,7 @@ export async function registerRoutes(app: Express) {
     }
   });
 
-  // JOBS: GENERATE
+  // ─── JOBS: GENERATE ──────────────────────────────────────────────────────
   app.post("/api/jobs/generate", requireAuth, async (req: Request, res: Response) => {
     try {
       const body = GenerateMaterialsInputSchema.parse(req.body);
@@ -196,7 +287,7 @@ export async function registerRoutes(app: Express) {
     }
   });
 
-  // JOBS: SAVE / LIST
+  // ─── JOBS: SAVE / LIST ───────────────────────────────────────────────────
   app.post("/api/jobs/save", requireAuth, async (req: any, res: any) => {
     try {
       const user = getAuthedUser(req);
@@ -218,7 +309,7 @@ export async function registerRoutes(app: Express) {
     }
   });
 
-  // PDF
+  // ─── PDF ─────────────────────────────────────────────────────────────────
   app.post("/api/pdf", requireAuth, async (req: Request, res: Response) => {
     try {
       const body = PdfInputSchema.parse(req.body);
@@ -226,9 +317,17 @@ export async function registerRoutes(app: Express) {
         title: safeTrim((body as any).title, "Document"),
         content: body.content,
       } as any);
-      if (!Buffer.isBuffer(buf) || buf.length < 10 || buf.subarray(0, 5).toString("utf8") !== "%PDF-") {
-        const preview = Buffer.isBuffer(buf) ? buf.toString("utf8").slice(0, 500) : String(buf);
-        return res.status(500).json({ error: "PDF generator returned non-PDF output", preview });
+      if (
+        !Buffer.isBuffer(buf) ||
+        buf.length < 10 ||
+        buf.subarray(0, 5).toString("utf8") !== "%PDF-"
+      ) {
+        const preview = Buffer.isBuffer(buf)
+          ? buf.toString("utf8").slice(0, 500)
+          : String(buf);
+        return res
+          .status(500)
+          .json({ error: "PDF generator returned non-PDF output", preview });
       }
       res.setHeader("Content-Type", "application/pdf");
       const fname = safeTrim((body as any).filename, "document.pdf").replace(/[/\\"]/g, "_");
@@ -241,7 +340,7 @@ export async function registerRoutes(app: Express) {
     }
   });
 
-  // RESUME UPLOAD
+  // ─── RESUME UPLOAD ───────────────────────────────────────────────────────
   app.post("/api/resume/upload", requireAuth, async (req: any, res: any) => {
     upload.single("file")(req, res, async (err: any) => {
       try {
