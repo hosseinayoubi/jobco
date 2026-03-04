@@ -1,9 +1,13 @@
 import { createApp } from "./app";
 
-const app = createApp();
-
 // Local dev only (Vercel does NOT use this entrypoint)
 const port = Number(process.env.PORT || 3000);
-app.listen(port, "0.0.0.0", () => {
-  console.log(`[dev] listening on http://localhost:${port}`);
+
+createApp().then((app) => {
+  app.listen(port, "0.0.0.0", () => {
+    console.log(`[dev] listening on http://localhost:${port}`);
+  });
+}).catch((err) => {
+  console.error("Failed to start server:", err);
+  process.exit(1);
 });
