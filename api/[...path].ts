@@ -1,8 +1,6 @@
-import { createApp } from "../server/app";
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-
-const app = createApp();
+import app from "../dist/vercel.cjs";
 
 export default function handler(req: VercelRequest, res: VercelResponse) {
-  return app(req as any, res as any);
+  return (app as any)(req, res);
 }
